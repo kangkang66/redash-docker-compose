@@ -1,0 +1,73 @@
+version: '3.2'
+
+services:
+  db_setup:
+    image: redash/redash
+    platform: linux/amd64
+    command: create_db
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      PYTHONUNBUFFERED: "0"
+      REDASH_LOG_LEVEL: "INFO"
+      REDASH_REDIS_URL: "redis://redis:6379/0"
+      REDASH_DATABASE_URL: "postgresql://postgres:redashpass@postgres/postgres"
+      REDASH_RATELIMIT_ENABLED: "false"
+    restart: on-failure
+
+  server:
+    image: redash/redash
+    platform: linux/amd64
+    command: server
+    depends_on:
+      - db_setup
+      - postgres
+      - redis
+    ports:
+      - "15000:5000"
+      - "15678:5678"
+    environment:
+      PYTHONUNBUFFERED: "0"
+      REDASH_LOG_LEVEL: "INFO"
+      REDASH_REDIS_URL: "redis://redis:6379/0"
+      REDASH_DATABASE_URL: "postgresql://postgres:redashpass@postgres/postgres"
+      REDASH_RATELIMIT_ENABLED: "false"
+    restart: unless-stopped
+
+  worker:
+    image: redash/redash
+    platform: linux/amd64
+    command: worker
+    depends_on:
+      - server
+    environment:
+      PYTHONUNBUFFERED: "0"
+      REDASH_LOG_LEVEL: "INFO"
+      REDASH_REDIS_URL: "redis://redis:6379/0"
+      REDASH_DATABASE_URL: "postgresql://postgres:redashpass@postgres/postgres"
+      QUEUES: "queries,scheduled_queries,celery,schemas"
+      WORKERS_COUNT: 4
+    restart: unless-stopped
+
+  redis:
+    image: redis:3-alpine
+    restart: unless-stopped
+    #ports:
+    #  - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  postgres:
+    image: postgres:12-alpine
+    restart: unless-stopped
+    #ports:
+    #  - "15432:5432"
+    environment:
+      POSTGRES_PASSWORD: redashpass
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  redis-data:
+  postgres-data:
